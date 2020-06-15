@@ -1,0 +1,48 @@
+proc timeseries data=cycles out=Tscycles;
+var ip ltir m3 cli shp ffr;
+run;
+options nonotes nosource nosource2 errors=0;
+%macro cc2(start,end);
+%do i=&start %to &end;
+%let j=%eval(&i+70-1);
+proc timeseries data=Tscycles (firstobs=&i obs=&j) out=ccl_&i outcrosscorr=cc_&i;
+var ip;
+crossvar ltir;
+crosscorr lag n ccov / NLAG=30;
+run;
+data cc_&i;
+set cc_&i;
+ccov2=ccov**2;
+run;
+%end;
+%mend cc2;
+%cc2(1,614)
+%macro order(start,end);
+%do i=&start \%to &end;
+proc sort data=cc_&i;
+by descending ccov2 ;
+run;
+%end;
+%mend order;
+%order(1,614)
+%macro final(start,end);
+%do n=&start \%to &end;
+data ccl_&n;
+set cc_&n(obs=1)
+run;
+proc delete data = cc_&n;
+run;
+%end;
+%mend final;
+%final(1,614)
+
+data all ;
+set ccl_1 - ccl_614 ;
+run;
+proc timeseries data=all out=all2;
+var ccov2 lag;
+run;
+symbol i=join v=none;
+proc gplot data=all2;
+plot (lag)*time / overlay grid legend=legend;
+run;
