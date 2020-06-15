@@ -1,0 +1,472 @@
+/* ********** WRITING DATA INTO MATRIX ************** */
+/* Suppose lf, a matrix containing our six variables : ip, ltir,
+,! m3, cli, shp and ffr */
+/**************** LOCAL OPTIMA WITH THE EVENT SYNCHRONIZATION
+,! METHOD ****************/
+x=j(nrow(lf),ncol(lf)-1,0);
+tmp= insert(lf,x, 0,ncol(lf)+1);
+/* See the Quiroga,Kreuz, and Grassberger article for more
+,! details */
+do t=3 to nrow(tmp)-3;
+do s=2 to 7;
+if tmp[t,s]>tmp[t-1,s] & tmp[t,s]>tmp[t+1,s] &
+,! tmp[t,s]>tmp[t-2,s] & tmp[t,s]>tmp[t+2,s] then tmp[t,s+6]=1;
+else tmp[t,s+6]=0;
+end;
+end;
+print tmp;
+/* tmp is a matrix containing data from lf and defined events (1
+,! if event, 0 if not) */
+/* Identify Event times */
+tx=loc(tmp[,8]=1);
+ty=loc(tmp[,9]=1);
+tz=loc(tmp[,10]=1);
+txx=loc(tmp[,11]=1);
+tyy=loc(tmp[,12]=1);
+tzz=loc(tmp[,13]=1);
+*print tx ty tz txx tyy tzz;
+/* We now have event times. */
+/* ************** LOCAL OPTIMA WITH THE SAS LOCPEAKS METHOD
+,! *******************/
+/* Defining the Module */
+/* Source:
+https://blogs.sas.com/content/iml/2013/08/28/finite-diff-estimate-maxi.html
+*/
+,!
+,!
+1
+/* Return the location of the local maxima of a vector (including
+,! end points).
+If there are duplicate values at a maximum, the index
+of the first and last maximum value is returned. */
+start locpeaks(x);
+small = min(x)-1; /* smaller than any point in
+,! the series */
+y = small // colvec(x) // small;/* original values are now in
+,! the interior */
+difSgn = dif(sign(dif(y))); /* dif of sign of slopes */
+/* subtract 2: -1 for inserting 
+small
+ at the beginning, and
+,! -1
+for the fact that negative values occurs AFTER the maximum
+,! */
+return(loc(element(difSgn, {-1 -2})) - 2);
+finish;
+/* Applying the module */
+optip=locpeaks(ip);
+optltir=locpeaks(ltir);
+optm3=locpeaks(m3);
+optcli=locpeaks(cli);
+optshp=locpeaks(shp);
+optffr=locpeaks(ffr);
+print optip optltir optm3 optcli optshp optffr;
+/* We preferred using the first method, as more events were
+,! identified */
+/*********************** TAU PARAMETER
+,! *****************************************/
+/* Fixed tau, smaller normally than the half of the minimum
+,! inter-event distance. */
+tau=1.75;
+/* Time variable Tau */
+do t=2 to nrow(ty)-1;
+do n=2 to nrow(tx)-1;
+min_vect = tx[n+1] - tx[n] // tx[n] - tx[n-1] // ty[t+1] - ty[t]
+,! // ty[t] - ty[t-1] ;
+min_tau = min(min_vect)/2;
+taus = min_tau // tau;
+v_tau = min(taus);
+v_taus = v_taus // v_tau ;
+2
+end;
+end;
+*print v_taus;
+tau2=j(1,1,tau);
+v_taus2=insert(v_taus,tau2,1);
+v_taus2=insert(v_taus,tau2,nrow(v_taus)+1);
+print v_taus2;
+/**************************** THE COUNTER
+,! **********************************/
+/* J(i,j) from the paper of Quiroga,Kreuz, and Grassberger. */
+/* We establish the counter (i.e number of times an event appears
+,! in x shortly after y */
+/* ********** IP AND LTIR COMPARISON *****************/
+c1r=j(nrow(tmp), 1,0); /* Ct(x|y) in the paper */
+do x=1 to nrow(tmp);
+do t=1 to nrow(ty);
+do n=1 to nrow(tx);
+if (tx[n]-ty[t])>0 & tx[n]-ty[t]<=tau & x-tx[n]>0 then
+,! c1r[x]=c1r[x]+1;
+else if tx[n]=ty[t] & x-tx[n]>0 then c1r[x]=c1r[x]+0.5;
+else c1r[x]=c1r[x];
+end;
+end;
+end;
+c2r=j(nrow(tmp), 1,0); /* Ct(y|x) in the paper */
+do x=1 to nrow(tmp);
+do n=1 to nrow(tx);
+do t=1 to nrow(ty);
+if (ty[t]-tx[n])>0 & ty[t]-tx[n]<=tau & x-ty[T]>0 then
+,! c2r[x]=c2r[x]+1;
+else if tx[n]=ty[t] & x-ty[t]>0 then c2r[x]=c2r[x]+0.5;
+else c2r[x]=c2r[x];
+end;
+end;
+3
+end;
+print c1r c2r;
+/************ IP AND M3 COMPARISON *****************/
+c3r=j(nrow(tmp), 1,0); /* Ct(x|z) in the paper */
+do x=1 to nrow(tmp);
+do t=1 to nrow(tz);
+do n=1 to nrow(tx);
+if (tx[n]-tz[t])>0 & tx[n]-tz[t]<=tau & x-tx[n]>0 then
+,! c3r[x]=c3r[x]+1;
+else if tx[n]=tz[t] & x-tx[n]>0 then c3r[x]=c3r[x]+0.5;
+else c3r[x]=c3r[x];
+end;
+end;
+end;
+c4r=j(nrow(tmp), 1,0); /* Ct(z|x) in the paper */
+do x=1 to nrow(tmp);
+do n=1 to nrow(tx);
+do t=1 to nrow(tz);
+if (tz[t]-tx[n])>0 & tz[t]-tx[n]<=tau & x-tz[T]>0 then
+,! c4r[x]=c4r[x]+1;
+else if tx[n]=tz[t] & x-tz[t]>0 then c4r[x]=c4r[x]+0.5;
+else c4r[x]=c4r[x];
+end;
+end;
+end;
+print c3r c4r;
+/************ LTIR AND M3 COMPARISON *****************/
+c5r=j(nrow(tmp), 1,0); /* Ct(x|z) in the paper */
+4
+do x=1 to nrow(tmp);
+do t=1 to nrow(tz);
+do n=1 to nrow(ty);
+if (ty[n]-tz[t])>0 & ty[n]-tz[t]<=tau & x-ty[n]>0 then
+,! c5r[x]=c5r[x]+1;
+else if ty[n]=tz[t] & x-ty[n]>0 then c5r[x]=c5r[x]+0.5;
+else c5r[x]=c5r[x];
+end;
+end;
+end;
+c6r=j(nrow(tmp), 1,0); /* Ct(z|x) in the paper */
+do x=1 to nrow(tmp);
+do n=1 to nrow(ty);
+do t=1 to nrow(tz);
+if (tz[t]-ty[n])>0 & tz[t]-ty[n]<=tau & x-tz[T]>0 then
+,! c6r[x]=c6r[x]+1;
+else if ty[n]=tz[t] & x-tz[t]>0 then c6r[x]=c6r[x]+0.5;
+else c6r[x]=c6r[x];
+end;
+end;
+end;
+print c5r c6r;
+/* ********** CLI AND SHP COMPARISON *****************/
+c7r=j(nrow(tmp), 1,0); /* Ct(x|y) in the paper */
+do x=1 to nrow(tmp);
+do t=1 to nrow(tyy);
+do n=1 to nrow(txx);
+if (txx[n]-tyy[t])>0 & txx[n]-tyy[t]<=tau & x-txx[n]>0 then
+,! c7r[x]=c7r[x]+1;
+else if txx[n]=tyy[t] & x-txx[n]>0 then c7r[x]=c7r[x]+0.5;
+else c7r[x]=c7r[x];
+end;
+end;
+5
+end;
+c8r=j(nrow(tmp), 1,0); /* Ct(x|y) in the paper */
+do x=1 to nrow(tmp);
+do n=1 to nrow(txx);
+do t=1 to nrow(tyy);
+if (tyy[t]-txx[n])>0 & tyy[t]-txx[n]<=tau & x-tyy[T]>0 then
+,! c8r[x]=c8r[x]+1;
+else if txx[n]=tyy[t] & x-tyy[t]>0 then c8r[x]=c8r[x]+0.5;
+else c8r[x]=c8r[x];
+end;
+end;
+end;
+*print c7r c8r;
+/************ CLI AND FFR COMPARISON *****************/
+c9r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do t=1 to nrow(tzz);
+do n=1 to nrow(txx);
+if (txx[n]-tzz[t])>0 & txx[n]-tzz[t]<=tau & x-txx[n]>0 then
+,! c9r[x]=c9r[x]+1;
+else if txx[n]=tzz[t] & x-txx[n]>0 then c9r[x]=c9r[x]+0.5;
+else c9r[x]=c9r[x];
+end;
+end;
+end;
+c10r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do n=1 to nrow(txx);
+do t=1 to nrow(tzz);
+if (tzz[t]-txx[n])>0 & tzz[t]-txx[n]<=tau & x-tzz[T]>0 then
+,! c10r[x]=c10r[x]+1;
+6
+else if txx[n]=tzz[t] & x-tzz[t]>0 then c10r[x]=c10r[x]+0.5;
+else c10r[x]=c10r[x];
+end;
+end;
+end;
+print c9r c10r;
+/************ SHP AND FFR COMPARISON *****************/
+c11r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do t=1 to nrow(tzz);
+do n=1 to nrow(tyy);
+if (tyy[n]-tzz[t])>0 & tyy[n]-tzz[t]<=tau & x-tyy[n]>0 then
+,! c11r[x]=c11r[x]+1;
+else if tyy[n]=tzz[t] & x-tyy[n]>0 then c11r[x]=c11r[x]+0.5;
+else c11r[x]=c11r[x];
+end;
+end;
+end;
+c12r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do n=1 to nrow(tyy);
+do t=1 to nrow(tzz);
+if (tzz[t]-tyy[n])>0 & tzz[t]-tyy[n]<=tau & x-tzz[T]>0 then
+,! c12r[x]=c12r[x]+1;
+else if tyy[n]=tzz[t] & x-tzz[t]>0 then c12r[x]=c12r[x]+0.5;
+else c12r[x]=c12r[x];
+end;
+end;
+end;
+print c11r c12r;
+/* ********** IP AND FFR COMPARISON *****************/
+7
+c13r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do t=1 to nrow(tzz);
+do n=1 to nrow(tx);
+if (tx[n]-tzz[t])>0 & tx[n]-tzz[t]<=tau & x-tx[n]>0 then
+,! c13r[x]=c13r[x]+1;
+else if tx[n]=tzz[t] & x-tx[n]>0 then c13r[x]=c13r[x]+0.5;
+else c13r[x]=c13r[x];
+end;
+end;
+end;
+c14r=j(nrow(tmp), 1,0);
+do x=1 to nrow(tmp);
+do n=1 to nrow(tx);
+do t=1 to nrow(tzz);
+if (tzz[t]-tx[n])>0 & tzz[t]-tx[n]<=tau & x-tzz[T]>0 then
+,! c14r[x]=c14r[x]+1;
+else if tx[n]=tzz[t] & x-tzz[t]>0 then c14r[x]=c14r[x]+0.5;
+else c14r[x]=c14r[x];
+end;
+end;
+end;
+print c13r c14r;
+/* We have the count. We will now use it to compute the pertinent
+,! statistics Q and q */
+/**************************** COMPUTING THE STATISTICS
+,! *********************************/
+/*************** SYNCHRO IP AND LTIR ***************/
+q1=j(nrow(tmp), 1,0);
+q2=j(nrow(tmp), 1,0);
+8
+q1=c1r+c2r; /* Q */
+q2=c1r-c2r; /* q */
+print q1 q2;
+time = (1:nrow(tmp));
+call series(time,q1);
+call series(time,q2); /* Positive if LTIR events goes before IP,
+,! negative if not */
+/*************** SYNCHRO IP AND M3 ***************/
+q3=j(nrow(tmp), 1,0);
+q4=j(nrow(tmp), 1,0);
+q3=c3r+c4r; /* Q */
+q4=c3r-c4r; /* q */
+print q3 q4;
+time = (1:nrow(tmp));
+call series(time,q3);
+call series(time,q4);
+/*************** SYNCHRO LTIR AND M3 ***************/
+q5=j(nrow(tmp), 1,0);
+q6=j(nrow(tmp), 1,0);
+q5=c5r+c6r; /* Q */
+q6=c5r-c6r; /* q */
+print q5 q6;
+time = (1:nrow(tmp));
+call series(time,q5);
+call series(time,q6);
+/*************** SYNCHRO CLI AND SHP ***************/
+9
+q11=j(nrow(tmp), 1,0);
+q22=j(nrow(tmp), 1,0);
+q11=c7r+c8r; /* Q */
+q22=c7r-c8r; /* q */
+print q11 q22;
+time = (1:nrow(tmp));
+call series(time,q11);
+call series(time,q22);
+/*************** SYNCHRO CLI AND FFR ***************/
+q33=j(nrow(tmp), 1,0);
+q44=j(nrow(tmp), 1,0);
+q33=c9r+c10r; /* Q */
+q44=c9r-c10r; /* q */
+print q33 q44;
+time = (1:nrow(tmp));
+call series(time,q33);
+call series(time,q44);
+/*************** SYNCHRO SHP AND FFR ***************/
+q55=j(nrow(tmp), 1,0);
+q66=j(nrow(tmp), 1,0);
+q55=c11r+c12r; /* Q */
+q66=c11r-c12r; /* q */
+print q55 q66;
+time = (1:nrow(tmp));
+call series(time,q55);
+call series(time,q66);
+/*************** SYNCHRO IP AND FFR ***************/
+10
+q111=j(nrow(tmp), 1,0);
+q222=j(nrow(tmp), 1,0);
+q111=c13r+c14r; /* Q */
+q222=c13r-c14r; /* q */
+print q111 q222;
+time = (1:nrow(tmp));
+call series(time,q111);
+call series(time,q222);
+/*********************** COMPUTING Q
+(n) and q
+(n)
+,! *********************************/
+/*********** FOR IP AND LTIR **********************/
+/* Q
+(n) with Delta(n)=71*/
+qn=j(nrow(q1), 1, 0);
+do n=71 to nrow(q1);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,9]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then qn[n]= (q1[n]-q1[n-70])/(sqrt(nx*ny)) ;
+else qn[n] = qn[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,qn);
+/* Resolved assymetry q
+(n) */
+ptitqn=j(nrow(q2), 1, 0);
+do n=71 to nrow(q2);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,9]=1 then ny=ny+1;
+11
+end;
+if (nx^=0 & ny^=0) then ptitqn[n]= (q2[n]-q2[n-70])/(sqrt(nx*ny))
+,! ;
+else ptitqn[n] = ptitqn[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,ptitqn);
+/***************** FOR IP AND M3 ***********************/
+/* Q
+(n) with Delta(n)=71*/
+qn2=j(nrow(q3), 1, 0);
+do n=71 to nrow(q3);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,10]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then qn2[n]= (q3[n]-q3[n-70])/(sqrt(nx*ny)) ;
+else qn2[n] = qn2[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,qn2);
+/* Resolved assymetry q
+(n) */
+ptitqn2=j(nrow(q4), 1, 0);
+do n=71 to nrow(q4);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,10]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then ptitqn2[n]=
+,! (q4[n]-q4[n-70])/(sqrt(nx*ny)) ;
+else ptitqn2[n] = ptitqn2[n-1] ;
+end;
+time = (1:nrow(tmp));
+12
+call series(time,ptitqn2);
+/***************** FOR LTIR AND M3 ***********************/
+/* Q
+(n) with Delta(n)=71*/
+qn3=j(nrow(q5), 1, 0);
+do n=71 to nrow(q5);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,9]=1 then nx=nx+1;
+if tmp[n-x,10]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then qn3[n]= (q5[n]-q5[n-70])/(sqrt(nx*ny)) ;
+else qn3[n] = qn3[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,qn3);
+/* Resolved assymetry q
+(n) */
+ptitqn3=j(nrow(q6), 1, 0);
+do n=71 to nrow(q6);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,9]=1 then nx=nx+1;
+if tmp[n-x,10]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then ptitqn3[n]=
+,! (q6[n]-q6[n-70])/(sqrt(nx*ny)) ;
+else ptitqn3[n] = ptitqn3[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,ptitqn3);
+/***************** FOR IP AND FFR ***********************/
+/* Q
+(n) with Delta(n)=71*/
+13
+qn4=j(nrow(q111), 1, 0);
+do n=71 to nrow(q111);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,13]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then qn4[n]=
+,! (q111[n]-q111[n-70])/(sqrt(nx*ny)) ;
+else qn4[n] = qn3[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,qn4);
+/* Resolved assymetry q
+(n) */
+ptitqn4=j(nrow(q222), 1, 0);
+do n=71 to nrow(q222);
+nx=0;
+ny=0;
+do x=1 to 70;
+if tmp[n-x,8]=1 then nx=nx+1;
+if tmp[n-x,13]=1 then ny=ny+1;
+end;
+if (nx^=0 & ny^=0) then ptitqn3[n]=
+,! (q222[n]-q222[n-70])/(sqrt(nx*ny)) ;
+else ptitqn4[n] = ptitqn4[n-1] ;
+end;
+time = (1:nrow(tmp));
+call series(time,ptitqn4);
