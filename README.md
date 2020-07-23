@@ -1,4 +1,4 @@
-# Event-synchronization-SAS
+# Monetary, Credit and Business Cycle relationship with the Event Synchronization method presented by Quiroga, Kreuz and Grassberger.
 Measure of synchronization of timeseries using SAS
 # # Monetary, credit and business cycle relationship: an empirical approach
 
